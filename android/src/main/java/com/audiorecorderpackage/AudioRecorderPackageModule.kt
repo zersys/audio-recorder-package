@@ -11,6 +11,7 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.module.annotations.ReactModule
 import java.io.IOException
 
+
 @ReactModule(name = AudioRecorderPackageModule.NAME)
 class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
   NativeAudioRecorderPackageSpec(reactContext) {
@@ -19,12 +20,33 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
   private var outputFilePath: String? = null
   private var isRecording = false
 
+  object RecordingStatus {
+    const val PAUSED = "Paused"
+    const val STARTED = "Started"
+    const val STOPPED = "Stopped"
+    const val STOPPED_DUE_TO_TIME_LIMIT = "Stopped Due To Time Limit"
+    const val PAUSED_DUE_TO_EXTERNAL_ACTION = "Paused Due To External Action"
+    const val RESUMED = "Resumed"
+  }
+
   override fun getName(): String {
     return NAME
   }
 
+  private fun sentRecordingStatusEvent(status: String) {
+    val statusMap: WritableMap = Arguments.createMap().apply {
+      putString("status", status)
+    }
+    emitOnRecordingStatusChanged(statusMap)
+  }
+
   @RequiresApi(Build.VERSION_CODES.S)
-  override fun startRecording(promise: Promise) {
+  override fun startRecording(
+    recordingTimeLimit: Double,
+    notifyTimeLimitReached: Boolean?,
+    notifyTimeLimit: Double?,
+    promise: Promise
+  ) {
     try {
       val outputDir = reactApplicationContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
       if (outputDir == null) {
@@ -47,6 +69,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         putBoolean("started", true)
         putString("filePath", outputFilePath)
       }
+      sentRecordingStatusEvent(RecordingStatus.STARTED)
       promise.resolve(response)
     } catch (e: IOException) {
       promise.reject("START_ERROR", "Failed to start recording: ${e.message}")
@@ -67,6 +90,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putString("filePath", outputFilePath)
         }
+        sentRecordingStatusEvent(RecordingStatus.STOPPED)
         promise.resolve(response)
       } catch (e: RuntimeException) {
         promise.reject("STOP_ERROR", "Failed to stop recording: ${e.message}")
@@ -83,6 +107,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("paused", true)
         }
+        sentRecordingStatusEvent(RecordingStatus.PAUSED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("PAUSE_ERROR", "Failed to pause recording: ${e.message}")
@@ -99,6 +124,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("resumed", true)
         }
+        sentRecordingStatusEvent(RecordingStatus.RESUMED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("RESUME_ERROR", "Failed to resume recording: ${e.message}")

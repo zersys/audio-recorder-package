@@ -2,8 +2,16 @@ import AudioRecorderPackage, {
   type RecordingResponse,
 } from './NativeAudioRecorderPackage';
 
-export function startRecording(): Promise<RecordingResponse> {
-  return AudioRecorderPackage.startRecording();
+export function startRecording(
+  recordingTimeLimit: number,
+  notifyTimeLimitReached: boolean | undefined,
+  notifyTimeLimit: number | undefined
+): Promise<RecordingResponse> {
+  return AudioRecorderPackage.startRecording(
+    recordingTimeLimit,
+    notifyTimeLimitReached,
+    notifyTimeLimit
+  );
 }
 
 export function stopRecording(): Promise<RecordingResponse> {
@@ -17,3 +25,5 @@ export function pauseRecording(): Promise<RecordingResponse> {
 export function resumeRecording(): Promise<RecordingResponse> {
   return AudioRecorderPackage.resumeRecording();
 }
+
+export default AudioRecorderPackage;

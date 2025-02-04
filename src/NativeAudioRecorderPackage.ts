@@ -1,4 +1,5 @@
 import type { TurboModule } from 'react-native';
+import type { EventEmitter } from 'react-native/Libraries/Types/CodegenTypes';
 import { TurboModuleRegistry } from 'react-native';
 
 export interface RecordingResponse {
@@ -6,9 +7,27 @@ export interface RecordingResponse {
   filePath?: string;
   duration?: number;
 }
+export interface EventRecordingStatus {
+  status?:
+    | 'Paused'
+    | 'Started'
+    | 'Stopped'
+    | 'StoppedDueToTimeLimit'
+    | 'PausedDueToExternalAction'
+    | 'Resumed';
+}
 
 export interface Spec extends TurboModule {
-  startRecording(): Promise<RecordingResponse>;
+  /**
+   * Supported events.
+   */
+  readonly onRecordingStatusChanged: EventEmitter<EventRecordingStatus>;
+
+  startRecording(
+    recordingTimeLimit: number,
+    notifyTimeLimitReached: boolean | undefined,
+    notifyTimeLimit: number | undefined
+  ): Promise<RecordingResponse>;
   stopRecording(): Promise<RecordingResponse>;
   pauseRecording(): Promise<RecordingResponse>;
   resumeRecording(): Promise<RecordingResponse>;
