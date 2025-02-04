@@ -1,12 +1,30 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from 'audio-recorder-package';
-
-const result = multiply(3, 7);
+import {
+  startRecording,
+  stopRecording,
+  pauseRecording,
+  resumeRecording,
+} from 'audio-recorder-package';
+import { useEffect } from 'react';
 
 export default function App() {
+  const testFunction = async () => {
+    try {
+      console.log('test');
+      const data = await startRecording();
+      console.log(data, 'ieufiueriueiru');
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    testFunction();
+  }, []);
+
   return (
     <View style={styles.container}>
-      <Text>Result: {result}</Text>
+      <Text>Result: </Text>
     </View>
   );
 }
