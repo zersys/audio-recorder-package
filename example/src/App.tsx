@@ -1,10 +1,5 @@
 import { Text, View, StyleSheet } from 'react-native';
-import {
-  startRecording,
-  stopRecording,
-  pauseRecording,
-  resumeRecording,
-} from 'audio-recorder-package';
+import { startRecording } from 'audio-recorder-package';
 import { useEffect } from 'react';
 
 export default function App() {
