@@ -1,5 +1,6 @@
 package com.audiorecorderpackage
 
+import android.content.Intent
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
@@ -40,6 +41,20 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     emitOnRecordingStatusChanged(statusMap)
   }
 
+  private fun startForeground() {
+    val serviceIntent = Intent(reactApplicationContext, AudioRecorderService::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      reactApplicationContext.startForegroundService(serviceIntent)
+    } else {
+      reactApplicationContext.startService(serviceIntent)
+    }
+  }
+
+  private fun stopForeground() {
+    val serviceIntent = Intent(reactApplicationContext, AudioRecorderService::class.java)
+    reactApplicationContext.stopService(serviceIntent)
+  }
+
   @RequiresApi(Build.VERSION_CODES.S)
   override fun startRecording(
     recordingTimeLimit: Double,
@@ -70,6 +85,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         putString("filePath", outputFilePath)
       }
       sentRecordingStatusEvent(RecordingStatus.STARTED)
+      startForeground()
       promise.resolve(response)
     } catch (e: IOException) {
       promise.reject("START_ERROR", "Failed to start recording: ${e.message}")
@@ -91,6 +107,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
           putString("filePath", outputFilePath)
         }
         sentRecordingStatusEvent(RecordingStatus.STOPPED)
+        stopForeground()
         promise.resolve(response)
       } catch (e: RuntimeException) {
         promise.reject("STOP_ERROR", "Failed to stop recording: ${e.message}")
