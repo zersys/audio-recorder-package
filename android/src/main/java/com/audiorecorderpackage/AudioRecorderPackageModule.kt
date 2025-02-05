@@ -1,5 +1,7 @@
 package com.audiorecorderpackage
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -9,6 +11,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
 import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -26,6 +29,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
   private var isRecording = false
   private var wasRecordingBeforeInterruption = false
   private lateinit var audioManager: AudioManager
+  private lateinit var notificationManager: NotificationManager
   private var audioFocusRequest: AudioFocusRequest? = null
 
   private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
@@ -34,32 +38,54 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         wasRecordingBeforeInterruption = isRecording
         if (isRecording) {
           mediaRecorder?.pause()
-          sendRecordingStatusEvent(RecordingStatus.PAUSED_DUE_TO_EXTERNAL_ACTION)
+          sendRecordingStatusEvent(RECORDING_PAUSED_DUE_TO_EXTERNAL_ACTION)
+          showNotification(
+            "Recording Paused", "Recording paused due to audio interruption", NOTIFICATION_ID_PAUSED
+          )
+          notificationManager.cancel(NOTIFICATION_ID_RESUMED)
         }
       }
 
       AudioManager.AUDIOFOCUS_GAIN -> {
         if (wasRecordingBeforeInterruption) {
           mediaRecorder?.resume()
-          sendRecordingStatusEvent(RecordingStatus.RESUMED)
+          sendRecordingStatusEvent(RECORDING_RESUMED)
           wasRecordingBeforeInterruption = false
+          showNotification(
+            "Recording Resumed", "Recording has been resumed", NOTIFICATION_ID_RESUMED
+          )
+          notificationManager.cancel(NOTIFICATION_ID_PAUSED)
         }
       }
     }
   }
 
-  init {
-    audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+  private fun showNotification(title: String, content: String, notificationId: Int) {
+    val channelId = "audio_recorder_channel"
+    val notification =
+      NotificationCompat.Builder(reactApplicationContext, channelId).setContentTitle(title)
+        .setContentText(content).setSmallIcon(android.R.drawable.sym_def_app_icon)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT).setAutoCancel(true).build()
+
+    try {
+      notificationManager.notify(notificationId, notification)
+    } catch (e: SecurityException) {
+      // Handle notification permission not granted
+    }
   }
 
-  object RecordingStatus {
-    const val PAUSED = "Paused"
-    const val STARTED = "Started"
-    const val STOPPED = "Stopped"
-    const val STOPPED_DUE_TO_TIME_LIMIT = "Stopped Due To Time Limit"
-    const val PAUSED_DUE_TO_EXTERNAL_ACTION = "Paused Due To External Action"
-    const val RESUMED = "Resumed"
+  init {
+    audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(
+        "audio_recorder_channel", "Audio Recorder", NotificationManager.IMPORTANCE_DEFAULT
+      )
+      notificationManager =
+        reactApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+      notificationManager.createNotificationChannel(channel)
+    }
   }
+
 
   override fun getName(): String {
     return NAME
@@ -95,6 +121,13 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     promise: Promise
   ) {
     try {
+      if (notifyTimeLimit != null && notifyTimeLimit >= recordingTimeLimit) {
+        promise.reject(
+          "INVALID_PARAMS",
+          "notifyTimeLimit must be less than recordingTimeLimit"
+        )
+        return
+      }
       val audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
 
@@ -132,7 +165,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         putBoolean("started", true)
         putString("filePath", outputFilePath)
       }
-      sendRecordingStatusEvent(RecordingStatus.STARTED)
+      sendRecordingStatusEvent(RECORDING_STARTED)
       startForeground()
       promise.resolve(response)
     } catch (e: IOException) {
@@ -164,7 +197,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putString("filePath", outputFilePath)
         }
-        sendRecordingStatusEvent(RecordingStatus.STOPPED)
+        sendRecordingStatusEvent(RECORDING_STOPPED)
         stopForeground()
         promise.resolve(response)
       } catch (e: RuntimeException) {
@@ -182,7 +215,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("paused", true)
         }
-        sendRecordingStatusEvent(RecordingStatus.PAUSED)
+        sendRecordingStatusEvent(RECORDING_PAUSED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("PAUSE_ERROR", "Failed to pause recording: ${e.message}")
@@ -199,7 +232,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("resumed", true)
         }
-        sendRecordingStatusEvent(RecordingStatus.RESUMED)
+        sendRecordingStatusEvent(RECORDING_RESUMED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("RESUME_ERROR", "Failed to resume recording: ${e.message}")
@@ -209,12 +242,16 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     }
   }
 
-  override fun killApplication(promise: Promise?) {
-    TODO("Not yet implemented")
-  }
-
-
   companion object {
     const val NAME = "AudioRecorderPackage"
+    private const val NOTIFICATION_ID_PAUSED = 2
+    private const val NOTIFICATION_ID_RESUMED = 3
+    private const val NOTIFICATION_ID_TIME_LIMIT = 4
+    private const val RECORDING_PAUSED = "Paused"
+    private const val RECORDING_STARTED = "Started"
+    private const val RECORDING_STOPPED = "Stopped"
+    private const val RECORDING_STOPPED_DUE_TO_TIME_LIMIT = "Stopped Due To Time Limit"
+    private const val RECORDING_PAUSED_DUE_TO_EXTERNAL_ACTION = "Paused Due To External Action"
+    private const val RECORDING_RESUMED = "Resumed"
   }
 }
