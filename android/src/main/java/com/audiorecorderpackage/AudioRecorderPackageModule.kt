@@ -1,6 +1,10 @@
 package com.audiorecorderpackage
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
@@ -20,6 +24,33 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
   private var mediaRecorder: MediaRecorder? = null
   private var outputFilePath: String? = null
   private var isRecording = false
+  private var wasRecordingBeforeInterruption = false
+  private lateinit var audioManager: AudioManager
+  private var audioFocusRequest: AudioFocusRequest? = null
+
+  private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+    when (focusChange) {
+      AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+        wasRecordingBeforeInterruption = isRecording
+        if (isRecording) {
+          mediaRecorder?.pause()
+          sendRecordingStatusEvent(RecordingStatus.PAUSED_DUE_TO_EXTERNAL_ACTION)
+        }
+      }
+
+      AudioManager.AUDIOFOCUS_GAIN -> {
+        if (wasRecordingBeforeInterruption) {
+          mediaRecorder?.resume()
+          sendRecordingStatusEvent(RecordingStatus.RESUMED)
+          wasRecordingBeforeInterruption = false
+        }
+      }
+    }
+  }
+
+  init {
+    audioManager = reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+  }
 
   object RecordingStatus {
     const val PAUSED = "Paused"
@@ -34,7 +65,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     return NAME
   }
 
-  private fun sentRecordingStatusEvent(status: String) {
+  private fun sendRecordingStatusEvent(status: String) {
     val statusMap: WritableMap = Arguments.createMap().apply {
       putString("status", status)
     }
@@ -55,6 +86,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     reactApplicationContext.stopService(serviceIntent)
   }
 
+
   @RequiresApi(Build.VERSION_CODES.S)
   override fun startRecording(
     recordingTimeLimit: Double,
@@ -63,6 +95,22 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     promise: Promise
   ) {
     try {
+      val audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+
+      audioFocusRequest =
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+          .setAudioAttributes(audioAttributes).setAcceptsDelayedFocusGain(false)
+          .setOnAudioFocusChangeListener(audioFocusListener).build()
+
+      // Request audio focus using the new API
+      val result = audioManager.requestAudioFocus(audioFocusRequest!!)
+
+      if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+        promise.reject("AUDIO_FOCUS_ERROR", "Cannot get audio focus")
+        return
+      }
+
       val outputDir = reactApplicationContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
       if (outputDir == null) {
         promise.reject("FILE_ERROR", "Unable to access storage directory")
@@ -84,7 +132,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         putBoolean("started", true)
         putString("filePath", outputFilePath)
       }
-      sentRecordingStatusEvent(RecordingStatus.STARTED)
+      sendRecordingStatusEvent(RecordingStatus.STARTED)
       startForeground()
       promise.resolve(response)
     } catch (e: IOException) {
@@ -92,10 +140,20 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  @RequiresApi(Build.VERSION_CODES.O)
+  private fun abandonAudioFocus() {
+    audioFocusRequest?.let { request ->
+      audioManager.abandonAudioFocusRequest(request)
+      audioFocusRequest = null
+    }
+  }
 
+
+  @RequiresApi(Build.VERSION_CODES.O)
   override fun stopRecording(promise: Promise) {
     if (isRecording) {
       try {
+        abandonAudioFocus()
         mediaRecorder?.apply {
           stop()
           release()
@@ -106,7 +164,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putString("filePath", outputFilePath)
         }
-        sentRecordingStatusEvent(RecordingStatus.STOPPED)
+        sendRecordingStatusEvent(RecordingStatus.STOPPED)
         stopForeground()
         promise.resolve(response)
       } catch (e: RuntimeException) {
@@ -124,7 +182,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("paused", true)
         }
-        sentRecordingStatusEvent(RecordingStatus.PAUSED)
+        sendRecordingStatusEvent(RecordingStatus.PAUSED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("PAUSE_ERROR", "Failed to pause recording: ${e.message}")
@@ -141,7 +199,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
         val response: WritableMap = Arguments.createMap().apply {
           putBoolean("resumed", true)
         }
-        sentRecordingStatusEvent(RecordingStatus.RESUMED)
+        sendRecordingStatusEvent(RecordingStatus.RESUMED)
         promise.resolve(response)
       } catch (e: IllegalStateException) {
         promise.reject("RESUME_ERROR", "Failed to resume recording: ${e.message}")
@@ -149,6 +207,10 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     } else {
       promise.reject("RESUME_ERROR", "Recording is not active")
     }
+  }
+
+  override fun killApplication(promise: Promise?) {
+    TODO("Not yet implemented")
   }
 
 
