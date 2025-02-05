@@ -16,6 +16,12 @@ export interface EventRecordingStatus {
     | 'PausedDueToExternalAction'
     | 'Resumed';
 }
+export interface MicrophoneMap {
+  id: string;
+  name: string;
+  type: string;
+}
+
 
 export interface Spec extends TurboModule {
   /**
@@ -31,6 +37,11 @@ export interface Spec extends TurboModule {
   stopRecording(): Promise<RecordingResponse>;
   pauseRecording(): Promise<RecordingResponse>;
   resumeRecording(): Promise<RecordingResponse>;
+  getAvailableMicrophones():Promise<[MicrophoneMap]>;
+  switchMicrophone(
+    microphoneId: string,
+  ):Promise<boolean>;
+  getCurrentMicrophone():Promise<MicrophoneMap>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('AudioRecorderPackage');

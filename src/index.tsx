@@ -1,4 +1,5 @@
 import AudioRecorderPackage, {
+  type MicrophoneMap,
   type RecordingResponse,
 } from './NativeAudioRecorderPackage';
 
@@ -24,6 +25,10 @@ export function pauseRecording(): Promise<RecordingResponse> {
 
 export function resumeRecording(): Promise<RecordingResponse> {
   return AudioRecorderPackage.resumeRecording();
+}
+
+export function getAvailableMicrophones(): Promise<[MicrophoneMap]> {
+  return AudioRecorderPackage.getAvailableMicrophones();
 }
 
 export default AudioRecorderPackage;

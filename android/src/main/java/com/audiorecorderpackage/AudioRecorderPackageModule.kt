@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaRecorder
@@ -15,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.module.annotations.ReactModule
 import java.io.IOException
@@ -123,8 +125,7 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     try {
       if (notifyTimeLimit != null && notifyTimeLimit >= recordingTimeLimit) {
         promise.reject(
-          "INVALID_PARAMS",
-          "notifyTimeLimit must be less than recordingTimeLimit"
+          "INVALID_PARAMS", "notifyTimeLimit must be less than recordingTimeLimit"
         )
         return
       }
@@ -240,6 +241,53 @@ class AudioRecorderPackageModule(reactContext: ReactApplicationContext) :
     } else {
       promise.reject("RESUME_ERROR", "Recording is not active")
     }
+  }
+
+  override fun getAvailableMicrophones(promise: Promise) {
+    try {
+      val availableMics: WritableArray = Arguments.createArray()
+      val audioManager =
+        reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+
+      var index = 0
+      for (device in devices) {
+        if (device.type == AudioDeviceInfo.TYPE_BUILTIN_MIC || device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || device.type == AudioDeviceInfo.TYPE_USB_DEVICE || device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
+          val micInfo: WritableMap = Arguments.createMap()
+          micInfo.putString("id", device.id.toString())
+          micInfo.putString("name", device.productName.toString())
+          micInfo.putString("type", device.type.toString())
+          availableMics.pushMap(micInfo)
+          index++
+        }
+      }
+      promise.resolve(availableMics)
+    } catch (e: Exception) {
+      promise.reject("MICROPHONE_ERROR", "Unable to get microphone list")
+    }
+  }
+
+  override fun switchMicrophone(microphoneId: String, promise: Promise) {
+    try {
+      val micId = microphoneId.toInt()
+      val audioManager =
+        reactApplicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+      val devices = audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS)
+
+      val selectedDevice = devices.find { it.id == micId }
+
+      if (selectedDevice == null) {
+        promise.reject("MIC_NOT_FOUND", "Microphone not found")
+        return
+      }
+      TODO("Not yet implemented")
+    } catch (e: Exception) {
+      promise.reject("MICROPHONE_ERROR", "Unable to get microphone list")
+    }
+  }
+
+  override fun getCurrentMicrophone(promise: Promise) {
+    TODO("Not yet implemented")
   }
 
   companion object {
