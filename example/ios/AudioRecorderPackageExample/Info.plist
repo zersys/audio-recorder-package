@@ -48,5 +48,16 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+		<key>NSDocumentsFolderUsageDescription</key>
+	<string>We need access to your documents folder</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone for recording audio.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

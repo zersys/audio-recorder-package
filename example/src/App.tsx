@@ -1,5 +1,13 @@
-import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
-import AudioRecorderPackage, {
+import {
+  Text,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  NativeEventEmitter,
+  TurboModuleRegistry,
+} from 'react-native';
+import {
   startRecording,
   stopRecording,
   pauseRecording,
@@ -8,7 +16,18 @@ import AudioRecorderPackage, {
 import { useState, useEffect, useRef } from 'react';
 import { PermissionsAndroid } from 'react-native';
 import type { EventSubscription } from 'react-native';
-import type { RecordingResponse } from '../../src/NativeAudioRecorderPackage';
+import type {
+  RecordingResponse,
+  Spec,
+} from '../../src/NativeAudioRecorderPackage';
+import Share from 'react-native-share';
+
+// ios
+const AudioRecorderPackage = TurboModuleRegistry.getEnforcing<Spec>(
+  'AudioRecorderPackage'
+);
+const audioRecorderEvents = new NativeEventEmitter(AudioRecorderPackage);
+//
 
 export default function App() {
   const listenerSubscription = useRef<null | EventSubscription>(null);
@@ -19,27 +38,46 @@ export default function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-    );
+    if (Platform.OS === 'android') {
+      PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
+      ).then((result) => {
+        console.log('Microphone permission result:', result);
+      });
+    }
   }, []);
+
+  // useEffect(() => {
+  //   listenerSubscription.current =
+  //     AudioRecorderPackage.onRecordingStatusChanged((data) => {
+  //       console.log(data, 'eiuhfiurefiurifueiu');
+  //     });
+
+  //   return () => {
+  //     listenerSubscription.current?.remove();
+  //     listenerSubscription.current = null;
+  //   };
+  // }, []); // android
 
   useEffect(() => {
-    listenerSubscription.current =
-      AudioRecorderPackage.onRecordingStatusChanged((data) => {
-        console.log(data, 'eiuhfiurefiurifueiu');
-      });
+    const subscription = audioRecorderEvents.addListener(
+      'onRecordingStatusChanged',
+      (data) => {
+        if (data?.reason == 'autoStop') {
+          setError(null);
+          setRecordingStatus('idle');
+          shareFile(recordingData?.filePath);
+        }
+      }
+    );
 
-    return () => {
-      listenerSubscription.current?.remove();
-      listenerSubscription.current = null;
-    };
-  }, []);
+    return () => subscription.remove();
+  }, []); // ios
 
   const handleStartRecording = async () => {
     try {
       setError(null);
-      const data = await startRecording(1000, true, 5000);
+      const data = await startRecording(10, true, 5);
       setRecordingData(data);
       setRecordingStatus('recording');
     } catch (err) {
@@ -53,6 +91,7 @@ export default function App() {
       setError(null);
       await stopRecording();
       setRecordingStatus('idle');
+      shareFile(recordingData?.filePath);
     } catch (err) {
       setError(err.message);
       console.log(err);
@@ -78,6 +117,21 @@ export default function App() {
     } catch (err) {
       setError(err.message);
       console.log(err);
+    }
+  };
+
+  const shareFile = async (filePath) => {
+    try {
+      const shareOptions = {
+        title: 'Share your recording',
+        url: `file://${filePath}`,
+        type: 'audio/m4a',
+      };
+
+      // Open the native share dialog
+      await Share.open(shareOptions);
+    } catch (error) {
+      console.log('Error while sharing file:', error);
     }
   };
 

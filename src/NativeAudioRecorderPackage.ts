@@ -7,6 +7,17 @@ export interface RecordingResponse {
   filePath?: string;
   duration?: number;
 }
+// export interface EventRecordingStatus {
+//   status?:
+//     | 'Paused'
+//     | 'Started'
+//     | 'Stopped'
+//     | 'StoppedDueToTimeLimit'
+//     | 'PausedDueToExternalAction'
+//     | 'Resumed';
+
+// }
+
 export interface EventRecordingStatus {
   status?:
     | 'Paused'
@@ -14,14 +25,16 @@ export interface EventRecordingStatus {
     | 'Stopped'
     | 'StoppedDueToTimeLimit'
     | 'PausedDueToExternalAction'
-    | 'Resumed';
+    | 'Resumed'
+    | 'Interrupted';
+  // reason?: 'userStop' | 'autoStop' | 'timeLimit' | 'externalAction';
+  timeRemaining?: number;
 }
 
 export interface Spec extends TurboModule {
   /**
    * Supported events.
    */
-  readonly onRecordingStatusChanged: EventEmitter<EventRecordingStatus>;
 
   startRecording(
     recordingTimeLimit: number,
@@ -31,6 +44,8 @@ export interface Spec extends TurboModule {
   stopRecording(): Promise<RecordingResponse>;
   pauseRecording(): Promise<RecordingResponse>;
   resumeRecording(): Promise<RecordingResponse>;
+
+  readonly onRecordingStatusChanged: EventEmitter<EventRecordingStatus>;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('AudioRecorderPackage');
